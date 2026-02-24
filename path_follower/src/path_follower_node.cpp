@@ -1,6 +1,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "geometry_msgs/msg/twist.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
 
 class PathFollower : public rclcpp::Node{
     public:
@@ -11,6 +12,12 @@ class PathFollower : public rclcpp::Node{
                 "/planning/path",
                 10,
                 std::bind(&PathFollower::onPath, this, std::placeholders::_1)
+            );
+
+            pose_sub_ = this->create_subscription<geometry_msgs::msg::PoseStamped>(
+                "/localization/pose",
+                10,
+                std::bind(&PathFollower::onPose, this, std::placeholders::_1)
             );
 
             // 더미 출력용 cmd_vel publisher
@@ -36,8 +43,22 @@ class PathFollower : public rclcpp::Node{
             );
         }
 
+        void onPose(const geometry_msgs::msg::PoseStamped::SharedPtr msg){
+            current_pose_ = *msg;
+            has_pose_ = true;
+
+            RCLCPP_INFO_THROTTLE(
+                this->get_logger(),
+                *this->get_clock(),
+                2000,
+                "Pose received: x=%.2f y=%.2f",
+                msg->pose.position.x,
+                msg->pose.position.y
+            );
+        }
+
     void controlLoop(){
-        if (!has_path_) {
+        if (!has_path_ || !has_pose_) {
             RCLCPP_WARN_THROTTLE(
                 this->get_logger(),
                 *this->get_clock(),
@@ -57,8 +78,7 @@ class PathFollower : public rclcpp::Node{
             this->get_logger(),
             *this->get_clock(),
             1000,
-            "Published dummy /cmd_vel: linear.x=%.2f angular.z=%.2f",
-            cmd.linear.x, cmd.angular.z
+            "Control running with pose"
         );
     }
 
@@ -66,6 +86,10 @@ private:
     rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_sub_;
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;
     rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
+
+    geometry_msgs::msg::PoseStamped current_pose_;
+    bool has_pose_{false};
 
     nav_msgs::msg::Path current_path_;
     bool has_path_{false};
