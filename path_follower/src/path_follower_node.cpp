@@ -2,6 +2,8 @@
 #include "nav_msgs/msg/path.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "geometry_msgs/msg/pose_stamped.hpp"
+#include <cmath>
+#include <limits>
 
 class PathFollower : public rclcpp::Node{
     public:
@@ -65,7 +67,71 @@ class PathFollower : public rclcpp::Node{
                 2000,
                 "Waiting for path...");
         return;
-    }
+        }
+
+        // 1. 현재 위치
+        double px = current_pose_.pose.position.x;
+        double py = current_pose_.pose.position.y;
+
+        // 2. 가장 가까운 점 찾기
+        double min_dist = std::numeric_limits<double>::max();
+        int closest_index = -1;
+
+        for(size_t i = 0; i < current_path_.poses.size(); ++i){
+            double dx = current_path_.poses[i].pose.position.x - px;
+            double dy = current_path_.poses[i].pose.position.y -py;
+            double dist = std::sqrt(dx * dx + dy * dy);
+
+            if(dist < min_dist){
+                min_dist = dist;
+                closest_index = i;
+            }
+        }
+
+        RCLCPP_INFO_THROTTLE(
+            this->get_logger(),
+            *this->get_clock(),
+            1000,
+            "Closest index: %d, distance: %.3f",
+            closest_index,
+            min_dist
+        );
+
+        // Lookahead distance
+        double Ld = 1.0;  // 1m
+
+        double accumulated_dist = 0.0;
+        int target_index = closest_index;
+
+        for (size_t i = closest_index; i < current_path_.poses.size() - 1; ++i) {
+
+            double x1 = current_path_.poses[i].pose.position.x;
+            double y1 = current_path_.poses[i].pose.position.y;
+
+            double x2 = current_path_.poses[i+1].pose.position.x;
+            double y2 = current_path_.poses[i+1].pose.position.y;
+
+            double segment_dist = std::sqrt(
+                (x2 - x1)*(x2 - x1) +
+                (y2 - y1)*(y2 - y1)
+            );
+
+            accumulated_dist += segment_dist;
+
+            if (accumulated_dist >= Ld) {
+                target_index = i + 1;
+                break;
+            }   
+        }   
+
+        RCLCPP_INFO_THROTTLE(
+            this->get_logger(),
+            *this->get_clock(),
+            1000,
+            "Target index: %d",
+            target_index
+        );
+
 
         // 아직 제어 계산 안 함: 더미 cmd_vel만 publish
         geometry_msgs::msg::Twist cmd;
@@ -82,17 +148,17 @@ class PathFollower : public rclcpp::Node{
         );
     }
 
-private:
-    rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_sub_;
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;
-    rclcpp::TimerBase::SharedPtr timer_;
-    rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
+    private:
+        rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr path_sub_;
+        rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;
+        rclcpp::TimerBase::SharedPtr timer_;
+        rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr pose_sub_;
 
-    geometry_msgs::msg::PoseStamped current_pose_;
-    bool has_pose_{false};
+        geometry_msgs::msg::PoseStamped current_pose_;
+        bool has_pose_{false};
 
-    nav_msgs::msg::Path current_path_;
-    bool has_path_{false};
+        nav_msgs::msg::Path current_path_;
+        bool has_path_{false};
 };
 
 int main(int argc, char **argv){

@@ -29,25 +29,26 @@ if(BUILD_TESTING)
 endif()
 
 add_executable(path_follower_node src/path_follower_node.cpp)
+add_executable(fake_path_pub src/fake_path_pub.cpp)
+add_executable(fake_pose_pub src/fake_pose_pub.cpp)
 
-ament_target_dependencies(path_follower_node
+ament_target_dependencies(
+  path_follower_node
   rclcpp
   nav_msgs
   geometry_msgs
   std_msgs
+
 )
 
-install(TARGETS
-  path_follower_node
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-add_executable(fake_path_pub src/fake_path_pub.cpp)
 ament_target_dependencies(fake_path_pub rclcpp nav_msgs geometry_msgs)
+ament_target_dependencies(fake_pose_pub rclcpp geometry_msgs)
+
 
 install(TARGETS
   path_follower_node
   fake_path_pub
+  fake_pose_pub
   DESTINATION lib/${PROJECT_NAME}
 )
 
